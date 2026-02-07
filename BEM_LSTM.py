@@ -1,9 +1,9 @@
 # BEM_LSTM.py
+# 事实上这种LSTM最好做成分类器的形式，直接判定载荷序列对应哪种运行状态，但目前我们没有收集到足够的标签数据
 import torch
 import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
-
 
 # ===== 1. 导入已有模块 =====
 from freedom import (
@@ -17,8 +17,7 @@ from BEM_PINN import (
     set_seed
 )
 
-
-
+set_seed(1024)
 
 
 # ==========================
@@ -38,9 +37,9 @@ class LoadLSTM(nn.Module):
     def forward(self, x):
         # x: [B, seq_len, 2]
         out, _ = self.lstm(x)
-        out = out[:, -1, :]   # 最后一个时间步
+        out = out[:, -1, :]  # 最后一个时间步
         out = self.fc(out)
-        return out            # [B, 2]
+        return out  # [B, 2]
 
 
 # ==========================
@@ -54,9 +53,9 @@ def compute_normalization_stats(Ft_all, T_all):
     """
     stats = {}
     stats["Ft_mean"] = np.mean(Ft_all, axis=0)
-    stats["Ft_std"]  = np.std(Ft_all, axis=0) + 1e-8
-    stats["T_mean"]  = np.mean(T_all, axis=0)
-    stats["T_std"]   = np.std(T_all, axis=0) + 1e-8
+    stats["Ft_std"] = np.std(Ft_all, axis=0) + 1e-8
+    stats["T_mean"] = np.mean(T_all, axis=0)
+    stats["T_std"] = np.std(T_all, axis=0) + 1e-8
     return stats
 
 
@@ -142,23 +141,20 @@ def train_lstm(model, X, y, epochs=200, lr=1e-3):
 # 反归一化器
 def denormalize(pred, stats, i):
     Ft = pred[0] * stats["Ft_std"][i] + stats["Ft_mean"][i]
-    T  = pred[1] * stats["T_std"][i]  + stats["T_mean"][i]
+    T = pred[1] * stats["T_std"][i] + stats["T_mean"][i]
     return Ft, T
-
-
-# 观察器
-import matplotlib.pyplot as plt
 
 
 # 用于观察
 def monitor_single_turbine(
-    pinn_model,
-    lstm_model,
-    stats,
-    turbine_id,
-    start_t=0,
-    duration=100,
-    seq_len=50
+        pinn_model,
+        lstm_model,
+        stats,
+        turbine_id,
+        start_t=0,
+        duration=100,
+        seq_len=50,
+        paint=False,
 ):
     """
     对单台风机进行在线监控，对比 PINN vs LSTM
@@ -185,10 +181,10 @@ def monitor_single_turbine(
 
     # ===== 2. LSTM 递推预测 =====
     for t in range(seq_len, duration - 1):
-        Ft_seq = (Ft_pinn[t-seq_len:t] - stats["Ft_mean"][turbine_id-1]) \
-                 / stats["Ft_std"][turbine_id-1]
-        T_seq = (T_pinn[t-seq_len:t] - stats["T_mean"][turbine_id-1]) \
-                 / stats["T_std"][turbine_id-1]
+        Ft_seq = (Ft_pinn[t - seq_len:t] - stats["Ft_mean"][turbine_id - 1]) \
+                 / stats["Ft_std"][turbine_id - 1]
+        T_seq = (T_pinn[t - seq_len:t] - stats["T_mean"][turbine_id - 1]) \
+                / stats["T_std"][turbine_id - 1]
 
         seq = np.stack([Ft_seq, T_seq], axis=1)
         seq = torch.tensor(seq, dtype=torch.float32).unsqueeze(0).to(device)
@@ -197,7 +193,7 @@ def monitor_single_turbine(
             pred = lstm_model(seq).cpu().numpy()[0]
 
         Ft_hat, T_hat = denormalize(
-            pred, stats, turbine_id-1
+            pred, stats, turbine_id - 1
         )
 
         Ft_lstm.append(Ft_hat)
@@ -207,30 +203,41 @@ def monitor_single_turbine(
     t_axis_pinn = np.arange(start_t + seq_len, start_t + duration - 1)
     t_axis_lstm = t_axis_pinn + 1
 
-    # ===== 3. 绘图 =====
-    fig, ax = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
+    if paint:
+        # ===== 3. 绘图（可选绘图模式） =====
+        fig, ax = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
 
-    ax[0].plot(t_axis_pinn, Ft_pinn[seq_len:-1], label="PINN")
-    ax[0].plot(t_axis_lstm, Ft_lstm, "--", label="LSTM")
-    ax[0].set_ylabel("Thrust [N]")
-    ax[0].legend()
+        ax[0].plot(t_axis_pinn, Ft_pinn[seq_len:-1], label="PINN")
+        ax[0].plot(t_axis_lstm, Ft_lstm, "--", label="LSTM")
+        ax[0].set_ylabel("Thrust [N]")
+        ax[0].legend()
 
-    ax[1].plot(t_axis_pinn, T_pinn[seq_len:-1], label="PINN")
-    ax[1].plot(t_axis_lstm, T_lstm, "--", label="LSTM")
-    ax[1].set_ylabel("Torque [Nm]")
-    ax[1].set_xlabel("Time [s]")
-    ax[1].legend()
+        ax[1].plot(t_axis_pinn, T_pinn[seq_len:-1], label="PINN")
+        ax[1].plot(t_axis_lstm, T_lstm, "--", label="LSTM")
+        ax[1].set_ylabel("Torque [Nm]")
+        ax[1].set_xlabel("Time [s]")
+        ax[1].legend()
 
-    plt.suptitle(f"Turbine {turbine_id} | Online Load Monitoring")
-    plt.tight_layout()
-    plt.show()
+        plt.suptitle(f"Turbine {turbine_id} | Online Load Monitoring")
+        plt.tight_layout()
+        plt.show()
+
+    # 4. ===== 计算重叠部分，求出相对误差 =====
+    relative_error_Ft = np.abs(Ft_lstm[:-1] - Ft_pinn[seq_len:-1][1:]) / (Ft_pinn[seq_len:-1][1::] + 1e-4)
+    relative_error_T = np.abs(T_lstm[:-1] - T_pinn[seq_len:-1][1:]) / (T_pinn[seq_len:-1][1::] + 1e-4)
+    return {
+        "max_relative_error_Ft": np.max(relative_error_Ft),
+        "max_relative_error_T": np.max(relative_error_T),
+        "mean_relative_error_Ft": np.mean(relative_error_Ft),
+        "mean_relative_error_T": np.mean(relative_error_T),
+    }
 
 
 # 读取模型的调用
 def load_pinn_and_lstm(
-    pinn_path="./model/inflow_angle_model_FullConstraints.pth",
-    lstm_path="./model/load_lstm.pth",
-    device="cpu"
+        pinn_path="./model/inflow_angle_model_FullConstraints.pth",
+        lstm_path="./model/load_lstm.pth",
+        device="cpu"
 ):
     # PINN
     pinn_model = load_model(
@@ -260,7 +267,6 @@ def load_pinn_and_lstm(
 # 5. 主程序
 # ==========================
 if __name__ == "__main__":
-    set_seed(42)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     SEQ_LEN = 50  # 使用前50s训练
     NUM_FEATURES = 2  # Ft, T
@@ -288,15 +294,29 @@ if __name__ == "__main__":
 
     # ===== 在线监控示例 =====
     pinn_model, lstm_model, stats = load_pinn_and_lstm(
-        pinn_path="./model/inflow_angle_model_FullConstraints.pth",
-        lstm_path="./model/load_lstm_50s.pth",
+        pinn_path="./Model/inflow_angle_model_FullConstraints.pth",
+        lstm_path="./Model/load_lstm_50s.pth",
         device=device
     )
-    monitor_single_turbine(
+    print(monitor_single_turbine(
         pinn_model=pinn_model,
         lstm_model=lstm_model,
         stats=stats,
-        turbine_id=6,   # 查询风机
+        turbine_id=100,  # 查询风机
         start_t=1,
-        duration=99
-    )
+        duration=99,
+        paint=True
+    ))
+    sum_RFt, sum_RT = 0., 0.
+    for i in range(1, NUM_TURBINES+1):
+        error = monitor_single_turbine(pinn_model=pinn_model,
+                                       lstm_model=lstm_model,
+                                       stats=stats,
+                                       turbine_id=i,  # 查询风机
+                                       start_t=1,
+                                       duration=99,
+                                       paint=False)
+        sum_RFt += error["mean_relative_error_Ft"]
+        sum_RT += error["mean_relative_error_T"]
+    print(f"Mean Ft Relative Error: {sum_RFt/NUM_TURBINES}\n"
+          f"Mean Ft Relative Error: {sum_RT/NUM_TURBINES}\n")

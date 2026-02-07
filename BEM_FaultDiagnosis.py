@@ -48,7 +48,7 @@ def inject_omega_fault(Omega, mode="drift", **kwargs):
     Omega_fault = Omega.copy()
 
     if mode == "drift":
-        eps = kwargs.get("eps", 0.002)
+        eps = kwargs.get("eps", 0.2)
         for i in range(len(Omega)):
             Omega_fault[i] *= (1 + eps * i)
 
@@ -57,10 +57,14 @@ def inject_omega_fault(Omega, mode="drift", **kwargs):
         Omega_fault += delta
 
     elif mode == "oscillation":
-        A = kwargs.get("A", 0.05)
+
+        A = kwargs.get("A", 0.5)
         f = kwargs.get("f", 0.1)
         t = np.arange(len(Omega))
         Omega_fault *= (1 + A * np.sin(2 * np.pi * f * t))
+
+    elif mode == "none":
+        return Omega_fault
 
     return Omega_fault
 
@@ -181,8 +185,8 @@ if __name__ == "__main__":
 
     pinn_model, lstm_model, stats = load_models(
         device,
-        "./model/inflow_angle_model_FullConstraints.pth",
-        "./model/load_lstm_50s.pth"
+        "./Model/inflow_angle_model_FullConstraints.pth",
+        "./Model/load_lstm_50s.pth"
     )
 
     fault_detection_single_turbine(

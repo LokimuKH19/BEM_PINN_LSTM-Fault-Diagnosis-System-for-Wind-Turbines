@@ -496,7 +496,7 @@ if __name__ == "__main__":
             print(
                 f"Epoch {epoch:5d} | "
                 f"train={loss.item():.3e} | "
-                f"test={loss_test.item():.3e}"
+                f"test={loss_test.item():.3e} |"
             )
 
         if epoch % 500 == 0 and epoch > 0:
@@ -514,8 +514,47 @@ if __name__ == "__main__":
                      t_test, i_test, f"{epoch} test")
             compare_all_turbines(model, t=100 - 42)
 
-    Path = "./model/inflow_angle_model_FullConstraints.pth"
+    Path = "./Model/inflow_angle_model_FullConstraints.pth"
     save_model(model, Path)
+
+    # ==========================
+    # 表1力学预测误差评估
+    # ==========================
+    def evaluate_mechanical_error(phi_pred, Ft_true, T_true, X_meta, stats=None):
+        """
+        phi_pred: [N, Nr] tensor，PINN预测的φ
+        Ft_true, T_true: [N] tensor，BEM真实力学值
+        X_meta: list, 包含原始输入 V, Omega, Theta 或可用于计算 Ft/T
+        返回: 平均相对误差
+        """
+        Ft_pred, T_pred, _, _ = calc_ftp_from_phi_batch(
+            phi_pred, X_meta[:, 0], X_meta[:, 1], X_meta[:, 2]
+        )
+        EPS = 1e-8
+        rel_err_Ft = torch.abs(Ft_pred - Ft_true) / (torch.abs(Ft_true) + EPS)
+        rel_err_T = torch.abs(T_pred - T_true) / (torch.abs(T_true) + EPS)
+
+        return {
+            "Ft_mean_rel_err": rel_err_Ft.mean().item(),
+            "T_mean_rel_err": rel_err_T.mean().item(),
+        }
+
+
+    # 训练集误差
+    with torch.no_grad():
+        phi_pred = model(X_train)
+    train_error = evaluate_mechanical_error(phi_pred, Ft_train, T_train, X_train)
+    print("\n===== Training set mechanical prediction error =====")
+    print(f"Ft: {train_error['Ft_mean_rel_err']:.3e}")
+    print(f"T : {train_error['T_mean_rel_err']:.3e}")
+
+    # 测试集误差
+    with torch.no_grad():
+        phi_test_pred = model(X_test)
+    test_error = evaluate_mechanical_error(phi_test_pred, Ft_test, T_test, X_test)
+    print("\n===== Testing set mechanical prediction error =====")
+    print(f"Ft: {test_error['Ft_mean_rel_err']:.3e}")
+    print(f"T : {test_error['T_mean_rel_err']:.3e}")
 
     # 测试预测函数
     print("\n测试预测函数:")
@@ -526,3 +565,4 @@ if __name__ == "__main__":
     model_loaded = load_model(Path, Nr=len(R_), device=device)
     Ft, T, LFt, LTs = predict_fan_forces(model_loaded, 13.0, 1.26, 10.0)
     print(f"Ft={Ft:.2f} N, T={T:.2f} Nm")
+
