@@ -17,6 +17,7 @@ The proposed method uses a PINN-based Blade Element Momentum (BEM) model to esti
 ├── BEM_PINN.py               # PINN-based BEM aerodynamic load model
 ├── BEM_LSTM.py               # LSTM load prediction model and training script
 ├── BEM_FaultDiagnosis.py     # Fault injection, monitoring, and detection
+├── Result.py                 # Fault diagnosis result on 100 WTs of 100s operation data
 └── README.md
 ```
 
