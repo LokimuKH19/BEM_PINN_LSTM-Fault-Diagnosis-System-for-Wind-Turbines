@@ -5,6 +5,8 @@ This repository provides a physics–data hybrid framework for real-time load pr
 
 The proposed method uses a PINN-based Blade Element Momentum (BEM) model to estimate physically consistent aerodynamic loads, while an LSTM model learns the temporal evolution of normal operating conditions and performs one-step-ahead load prediction. Abnormal turbine dynamics are identified by monitoring the residuals between LSTM predictions and PINN estimations.
 
+The technical details is in the filefolder `Models/`.
+
 ---
 
 ## 📁 Repository Structure
@@ -12,7 +14,7 @@ The proposed method uses a PINN-based Blade Element Momentum (BEM) model to esti
 ```text
 .
 ├── DATA2/                    # Simulated wind turbine operational data
-├── Models/                   # Trained PINN and LSTM model checkpoints
+├── Models/                   # Trained PINN and LSTM model checkpoints, and detailed documents for the workflow.
 ├── freedom.py                # SCADA-like data loader and preprocessing
 ├── BEM_PINN.py               # PINN-based BEM aerodynamic load model
 ├── BEM_LSTM.py               # LSTM load prediction model and training script
