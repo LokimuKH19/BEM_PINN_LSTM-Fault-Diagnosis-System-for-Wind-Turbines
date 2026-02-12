@@ -121,7 +121,7 @@ Our reason is the inflow angle $\varphi$ in fact shares the similar direction wi
 Therefore, the $\varphi$ locates near the `phi0`. Further test indicates the ±30% offset basically satisfies the requirements, resulting in the continuous forward function:
 
 ```math
-  phi = \arctan(\frac{V}{\Omega r}) \cdot (1 + 0.3\cdot\tanh(NN))
+  \varphi = \arctan\left(\frac{V}{\Omega r}\right) \cdot \left(1 + 0.3\cdot\tanh(NN)\right)
 ```
 
 > The better way to adjust the parameter `0.3` is also make it as a learnable parameter which lies in $[0.1, 0.5]$.
