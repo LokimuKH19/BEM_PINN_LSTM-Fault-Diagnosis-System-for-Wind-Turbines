@@ -156,7 +156,6 @@ def smoothness_loss(phi, dr):
     loss = torch.mean((d2phi / (dr[:,1:-1]**2))**2)
     return loss
 
-# 倾向于下凸约束
 def concave_down_loss(phi):
     """
     phi: [B, Nr] tensor
@@ -168,5 +167,8 @@ def concave_down_loss(phi):
     loss = torch.mean(torch.relu(d2phi))
     return loss
 ```
+
+By applying the pure physics-driven modeling strategy, the performance on the $phi(r)$ curve:
+
 
 ## 📊 How to Diagnose the Faults via LSTM?
